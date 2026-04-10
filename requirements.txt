@@ -1,0 +1,2 @@
+discord.py
+python-a2s
