@@ -24,7 +24,7 @@ if not BATTLEMETRICS_TOKEN:
     sys.exit(1)
 
 # ID вашего сервера в BattleMetrics
-BATTLEMETRICS_SERVER_ID = "ВАШ_ID_СЕРВЕРА"  # ЗАМЕНИТЕ НА ID ВАШЕГО СЕРВЕРА!
+BATTLEMETRICS_SERVER_ID = "32115022"  # ЗАМЕНИТЕ НА ID ВАШЕГО СЕРВЕРА!
 CHANNEL_ID = 1490763178513141892               # ID канала для мониторинга
 
 RESTART_ROLE_IDS = [
