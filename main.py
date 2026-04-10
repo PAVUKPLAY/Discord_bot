@@ -19,7 +19,7 @@ if not BATTLEMETRICS_TOKEN:
     logging.error("❌ BattleMetrics API Token не найден!")
     sys.exit(1)
 
-BATTLEMETRICS_SERVER_ID = "32115022"   # ЗАМЕНИТЕ НА РЕАЛЬНЫЙ ID
+BATTLEMETRICS_SERVER_ID = "ВАШ_ID_СЕРВЕРА"   # ЗАМЕНИТЕ НА РЕАЛЬНЫЙ ID
 CHANNEL_ID = 1490763178513141892
 
 RESTART_ROLE_IDS = [
