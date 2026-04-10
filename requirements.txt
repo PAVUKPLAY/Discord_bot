@@ -1,2 +1,2 @@
 discord.py
-battlemetrics
+git+https://github.com/OseSem/battlemetrics.git
