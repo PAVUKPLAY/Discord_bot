@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands, tasks
-from discord import app_commands
 import asyncio
 import logging
 import os
@@ -12,26 +11,20 @@ from typing import Optional, Dict, Any
 from battlemetrics import Battlemetrics
 
 # ================= НАСТРОЙКИ ========================================
-# ВАЖНО: Добавьте переменную BATTLEMETRICS_TOKEN в окружение на хостинге!
-BATTLEMETRICS_TOKEN = os.getenv('BATTLEMETRICS_TOKEN')
-if not BATTLEMETRICS_TOKEN:
-    logging.error("❌ BattleMetrics API Token не найден! Установите переменную окружения BATTLEMETRICS_TOKEN")
-    sys.exit(1)
-
-# Токен Discord бота (убедитесь, что он добавлен в переменные окружения)
+# ВАЖНО: Добавьте переменные окружения на хостинге!
 DISCORD_BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 if not DISCORD_BOT_TOKEN:
     logging.error("❌ Discord Bot Token не найден! Установите переменную окружения DISCORD_BOT_TOKEN")
     sys.exit(1)
 
-# ID вашего сервера в BattleMetrics
-# Чтобы его узнать, откройте страницу вашего сервера на Battlemetrics.com.
-# ID находится в URL: https://www.battlemetrics.com/servers/arma3/<ID_СЕРВЕРА>
-BATTLEMETRICS_SERVER_ID = "32115022"  # ЗАМЕНИТЕ НА ID ВАШЕГО СЕРВЕРА!
+BATTLEMETRICS_TOKEN = os.getenv('BATTLEMETRICS_TOKEN')
+if not BATTLEMETRICS_TOKEN:
+    logging.error("❌ BattleMetrics API Token не найден! Установите переменную окружения BATTLEMETRICS_TOKEN")
+    sys.exit(1)
 
+BATTLEMETRICS_SERVER_ID = "32115022"  # Замените на ID вашего сервера в BattleMetrics
 CHANNEL_ID = 1490763178513141892               # ID канала для мониторинга
 
-# Роли, которые могут перезапускать бота (укажите свои ID)
 RESTART_ROLE_IDS = [
     1333192664199205005,   # Командир
     1333193701064839198,   # Зам. Командира
@@ -48,34 +41,42 @@ status_message = None
 players_message = None
 server_online_since = None
 
+# Глобальный клиент BattleMetrics (создаём один раз)
+bm_client = None
+
+# ------------------------------------------------------------
+# Инициализация клиента BattleMetrics
+# ------------------------------------------------------------
+def init_battlemetrics():
+    global bm_client
+    if bm_client is None:
+        bm_client = Battlemetrics(BATTLEMETRICS_TOKEN)
+        logging.info("BattleMetrics клиент инициализирован")
+
 # ------------------------------------------------------------
 # Получение статуса сервера через BattleMetrics API
 # ------------------------------------------------------------
 async def get_server_status() -> Optional[Dict[str, Any]]:
-    """
-    Получает информацию о сервере из BattleMetrics API.
-    Возвращает словарь с данными или None в случае ошибки.
-    """
-    async with Battlemetrics(BATTLEMETRICS_TOKEN) as bm_client:
-        try:
-            # Получаем информацию о сервере по его ID
-            server = await bm_client.get_server(BATTLEMETRICS_SERVER_ID)
-            
-            # Получаем список игроков на сервере
-            players = await bm_client.list_players(server_id=BATTLEMETRICS_SERVER_ID)
-            
-            status = {
-                "name": server.attributes.name,
-                "map": server.attributes.details.map,  # Название карты
-                "players_online": server.attributes.players,
-                "players_max": server.attributes.max_players,
-                "players_list": [p.attributes.name for p in players]
-            }
-            logging.info(f"Статус получен: {status['players_online']}/{status['players_max']} игроков")
-            return status
-        except Exception as e:
-            logging.error(f"Ошибка при запросе к BattleMetrics API: {e}")
-            return None
+    global bm_client
+    try:
+        init_battlemetrics()
+        # Получаем информацию о сервере
+        server = await bm_client.get_server(BATTLEMETRICS_SERVER_ID)
+        # Получаем список игроков
+        players = await bm_client.list_players(server_id=BATTLEMETRICS_SERVER_ID)
+        
+        status = {
+            "name": server.attributes.name,
+            "map": server.attributes.details.map,
+            "players_online": server.attributes.players,
+            "players_max": server.attributes.max_players,
+            "players_list": [p.attributes.name for p in players]
+        }
+        logging.info(f"Статус получен: {status['players_online']}/{status['players_max']} игроков")
+        return status
+    except Exception as e:
+        logging.error(f"Ошибка при запросе к BattleMetrics API: {e}")
+        return None
 
 # ------------------------------------------------------------
 # Форматирование времени работы
@@ -137,12 +138,10 @@ def create_status_embed(status_data):
         description=f"**{status_emoji} Состояние:** {status_text}"
     )
 
-    # Первая строка (3 поля)
     embed.add_field(name="👥 Игроки", value=f"**{status_data['players_online']}** / {status_data['players_max']}", inline=True)
     embed.add_field(name="🗺️ Карта", value=f"**{status_data['map']}**", inline=True)
     embed.add_field(name="🎖️ Бойцы [G4S]", value=f"**{g4s_count}** игроков", inline=True)
 
-    # Вторая строка (2 поля)
     embed.add_field(name="📊 Загруженность сервера", value=f"{bar_precise} `{percent}%`", inline=True)
     if server_online_since is not None:
         uptime_seconds = int((datetime.now(timezone.utc) - server_online_since).total_seconds())
@@ -156,7 +155,7 @@ def create_status_embed(status_data):
     return embed
 
 # ------------------------------------------------------------
-# Embed списка игроков (ники в обратных кавычках)
+# Embed списка игроков
 # ------------------------------------------------------------
 def create_players_embed(players_list):
     if not players_list:
@@ -202,7 +201,7 @@ def create_players_embed(players_list):
     return embed
 
 # ------------------------------------------------------------
-# Фоновое задание: обновление двух сообщений
+# Фоновое задание
 # ------------------------------------------------------------
 @tasks.loop(minutes=1)
 async def auto_update():
@@ -234,7 +233,6 @@ async def auto_update():
         logging.error(f"Канал {CHANNEL_ID} не найден!")
         return
 
-    # Обновление статуса сервера
     embed_status = create_status_embed(status_data)
     if status_message is None:
         async for msg in channel.history(limit=20):
@@ -253,7 +251,6 @@ async def auto_update():
         except Exception as e:
             logging.error(f"Ошибка редактирования статуса: {e}")
 
-    # Обновление списка игроков
     players_list = status_data["players_list"] if status_data else []
     embed_players = create_players_embed(players_list)
     if players_message is None:
@@ -274,7 +271,7 @@ async def auto_update():
             logging.error(f"Ошибка редактирования списка: {e}")
 
 # ------------------------------------------------------------
-# Слеш-команда /restart (для нескольких ролей)
+# Команда /restart
 # ------------------------------------------------------------
 @bot.tree.command(name="restart", description="Перезапустить бота (только для определённых ролей)")
 async def restart_command(interaction: discord.Interaction):
@@ -292,6 +289,7 @@ async def restart_command(interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     logging.info(f"Бот {bot.user} запущен!")
+    init_battlemetrics()
     try:
         synced = await bot.tree.sync()
         logging.info(f"Синхронизировано {len(synced)} команд(ы)")
@@ -303,7 +301,7 @@ async def on_ready():
 # Запуск
 # ------------------------------------------------------------
 if __name__ == "__main__":
-    if not BATTLEMETRICS_SERVER_ID or BATTLEMETRICS_SERVER_ID == "ВАШ_ID_СЕРВЕРА":
+    if BATTLEMETRICS_SERVER_ID == "ВАШ_ID_СЕРВЕРА":
         print("⚠️ ВНИМАНИЕ: Укажите ID вашего сервера в переменной BATTLEMETRICS_SERVER_ID!")
     else:
         bot.run(DISCORD_BOT_TOKEN)
