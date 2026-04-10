@@ -7,12 +7,16 @@ import os
 import sys
 from datetime import datetime, timezone
 
-# ================= НАСТРОЙКИ ========================================
+# ================= ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ ==============================
+DISCORD_BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
+if not DISCORD_BOT_TOKEN:
+    logging.error("❌ Токен не найден! Установите переменную окружения DISCORD_BOT_TOKEN")
+    sys.exit(1)
+
 SERVER_IP = "80.242.59.106"
 SERVER_QUERY_PORT = 2303
 CHANNEL_ID = 1490763178513141892               
 
-# Роли для перезапуска
 RESTART_ROLE_IDS = [
     1333192664199205005,   # Командир
     1333193701064839198,   # Зам. Командира
@@ -129,7 +133,7 @@ def create_status_embed(status_data):
     return embed
 
 # ------------------------------------------------------------
-# Embed списка игроков (ники в обратных кавычках, как проценты)
+# Embed списка игроков (ники в обратных кавычках)
 # ------------------------------------------------------------
 def create_players_embed(players_list):
     if not players_list:
@@ -138,7 +142,6 @@ def create_players_embed(players_list):
             description="На сервере сейчас никого нет.",
             color=discord.Color.blue()
         )
-    # Каждый ник оборачиваем в обратные кавычки (моноширинный стиль)
     players_list = [f"🎮 `{name}`" for name in players_list]
     embed = discord.Embed(
         title=f"🎮 Список игроков ({len(players_list)})",
@@ -171,7 +174,7 @@ def create_players_embed(players_list):
 
     add_inline_field_no_name(embed, left, inline=True)
     add_inline_field_no_name(embed, right, inline=True)
-    embed.set_footer(text="🔄 Обновление было")
+    embed.set_footer(text="Полные ники, без обрезания")
     embed.timestamp = datetime.now(timezone.utc)
     return embed
 
@@ -248,7 +251,7 @@ async def auto_update():
             logging.error(f"Ошибка редактирования списка: {e}")
 
 # ------------------------------------------------------------
-# Слеш-команда /restart
+# Слеш-команда /restart (для нескольких ролей)
 # ------------------------------------------------------------
 @bot.tree.command(name="restart", description="Перезапустить бота (только для определённых ролей)")
 async def restart_command(interaction: discord.Interaction):
@@ -277,7 +280,4 @@ async def on_ready():
 # Запуск
 # ------------------------------------------------------------
 if __name__ == "__main__":
-    if DISCORD_BOT_TOKEN == "ВАШ_ТОКЕН_БОТА":
-        print("⚠️ ВНИМАНИЕ: Замените токен на реальный!")
-    else:
-        bot.run(DISCORD_BOT_TOKEN)
+    bot.run(DISCORD_BOT_TOKEN)
