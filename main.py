@@ -19,7 +19,7 @@ if not BATTLEMETRICS_TOKEN:
     logging.error("❌ BattleMetrics API Token не найден!")
     sys.exit(1)
 
-BATTLEMETRICS_SERVER_ID = "32115022"   # ЗАМЕНИТЕ НА РЕАЛЬНЫЙ ID
+BATTLEMETRICS_SERVER_ID = "32115022"          # ID вашего сервера
 CHANNEL_ID = 1490763178513141892
 
 RESTART_ROLE_IDS = [
@@ -62,23 +62,22 @@ async def get_server_status() -> Optional[Dict[str, Any]]:
         if not server_data:
             return None
         attrs = server_data["data"]["attributes"]
-        
-        # Получаем список игроков
-        players_data = await fetch_battlemetrics(f"servers/{BATTLEMETRICS_SERVER_ID}/players")
+
+        # Получаем список игроков (через include=player)
+        players_data = await fetch_battlemetrics(f"servers/{BATTLEMETRICS_SERVER_ID}?include=player")
         players_list = []
-        if players_data and "data" in players_data:
-            for p in players_data["data"]:
-                name = p.get("attributes", {}).get("name")
-                if name:
-                    players_list.append(name)
-        # Если нет, пробуем alternative (некоторые версии API кладут игроков в included)
-        if not players_list and players_data and "included" in players_data:
-            for inc in players_data["included"]:
-                if inc.get("type") == "player":
-                    name = inc.get("attributes", {}).get("name")
+        if players_data and "included" in players_data:
+            for item in players_data["included"]:
+                if item.get("type") == "player" and "attributes" in item:
+                    name = item["attributes"].get("name")
                     if name:
                         players_list.append(name)
-        
+
+        # Логируем для отладки
+        logging.info(f"Найдено игроков в ответе API: {len(players_list)}")
+        if players_list:
+            logging.info(f"Примеры имён: {players_list[:5]}")
+
         status = {
             "name": attrs["name"],
             "map": attrs["details"].get("map", "Unknown"),
@@ -86,7 +85,7 @@ async def get_server_status() -> Optional[Dict[str, Any]]:
             "players_max": attrs["maxPlayers"],
             "players_list": players_list
         }
-        logging.info(f"Статус: {status['players_online']}/{status['players_max']} игроков, список: {len(players_list)}")
+        logging.info(f"Статус: {status['players_online']}/{status['players_max']} игроков, в списке: {len(players_list)}")
         return status
     except Exception as e:
         logging.error(f"Ошибка запроса: {e}")
@@ -204,7 +203,7 @@ def create_players_embed(players_list):
     return embed
 
 # ------------------------------------------------------------
-# Фоновое обновление
+# Фоновое обновление (каждую минуту)
 # ------------------------------------------------------------
 @tasks.loop(minutes=1)
 async def auto_update():
@@ -302,7 +301,6 @@ async def on_ready():
 # Запуск
 # ------------------------------------------------------------
 if __name__ == "__main__":
-    if BATTLEMETRICS_SERVER_ID == "ВАШ_ID_СЕРВЕРА":
-        print("⚠️ ВНИМАНИЕ: Укажите ID вашего сервера в переменной BATTLEMETRICS_SERVER_ID!")
-    else:
-        bot.run(DISCORD_BOT_TOKEN)
+    if BATTLEMETRICS_SERVER_ID == "32115022":   # Проверка, что ID не заглушка
+        print("✅ ID сервера указан, запускаем бота...")
+    bot.run(DISCORD_BOT_TOKEN)
