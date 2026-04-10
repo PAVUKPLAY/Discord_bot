@@ -41,18 +41,16 @@ async def get_server_status():
         server_address = (SERVER_IP, SERVER_QUERY_PORT)
         info = await a2s.ainfo(server_address, timeout=5.0)
         players = await a2s.aplayers(server_address, timeout=5.0)
-        status = {
-            "name": info.server_name,
-            "map": info.map_name,
-            "players_online": info.player_count,
-            "players_max": info.max_players,
-            "players_list": [p.name for p in players]
-        }
-        logging.info(f"Статус получен: {status['players_online']}/{status['players_max']} игроков")
-        return status
+        # ... остальное
+    except a2s.BrokenMessageError as e:
+        logging.error(f"Ошибка A2S (неверный ответ): {e}")
+    except ConnectionRefusedError:
+        logging.error("Ошибка A2S: соединение отклонено")
+    except TimeoutError:
+        logging.error("Ошибка A2S: таймаут подключения")
     except Exception as e:
-        logging.error(f"Ошибка A2S: {e}")
-        return None
+        logging.error(f"Ошибка A2S: {type(e).__name__}: {e}")
+    return None
 
 # ------------------------------------------------------------
 # Форматирование времени работы
