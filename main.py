@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands, tasks
+from discord import app_commands
 import asyncio
 import logging
 import os
@@ -7,11 +8,11 @@ import sys
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
-# Библиотека для работы с BattleMetrics API
-from battlemetrics import Battlemetrics
+# Импортируем библиотеку. Обратите внимание: class battlemetrics с маленькой буквы!
+from battlemetrics import battlemetrics
 
 # ================= НАСТРОЙКИ ========================================
-# ВАЖНО: Добавьте переменные окружения на хостинге!
+# Получаем токены из переменных окружения
 DISCORD_BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 if not DISCORD_BOT_TOKEN:
     logging.error("❌ Discord Bot Token не найден! Установите переменную окружения DISCORD_BOT_TOKEN")
@@ -22,7 +23,8 @@ if not BATTLEMETRICS_TOKEN:
     logging.error("❌ BattleMetrics API Token не найден! Установите переменную окружения BATTLEMETRICS_TOKEN")
     sys.exit(1)
 
-BATTLEMETRICS_SERVER_ID = "32115022"  # Замените на ID вашего сервера в BattleMetrics
+# ID вашего сервера в BattleMetrics
+BATTLEMETRICS_SERVER_ID = "ВАШ_ID_СЕРВЕРА"  # ЗАМЕНИТЕ НА ID ВАШЕГО СЕРВЕРА!
 CHANNEL_ID = 1490763178513141892               # ID канала для мониторинга
 
 RESTART_ROLE_IDS = [
@@ -41,36 +43,26 @@ status_message = None
 players_message = None
 server_online_since = None
 
-# Глобальный клиент BattleMetrics (создаём один раз)
-bm_client = None
-
-# ------------------------------------------------------------
-# Инициализация клиента BattleMetrics
-# ------------------------------------------------------------
-def init_battlemetrics():
-    global bm_client
-    if bm_client is None:
-        bm_client = Battlemetrics(BATTLEMETRICS_TOKEN)
-        logging.info("BattleMetrics клиент инициализирован")
-
 # ------------------------------------------------------------
 # Получение статуса сервера через BattleMetrics API
 # ------------------------------------------------------------
 async def get_server_status() -> Optional[Dict[str, Any]]:
-    global bm_client
     try:
-        init_battlemetrics()
-        # Получаем информацию о сервере
-        server = await bm_client.get_server(BATTLEMETRICS_SERVER_ID)
-        # Получаем список игроков
-        players = await bm_client.list_players(server_id=BATTLEMETRICS_SERVER_ID)
+        # Создаём клиент. Обратите внимание: battlemetrics с маленькой буквы!
+        client = battlemetrics(BATTLEMETRICS_TOKEN)
+        
+        # Получаем информацию о сервере по его ID
+        server = await client.get_server(BATTLEMETRICS_SERVER_ID)
+        
+        # Получаем список игроков на сервере
+        players = await client.list_players(server_id=BATTLEMETRICS_SERVER_ID)
         
         status = {
-            "name": server.attributes.name,
-            "map": server.attributes.details.map,
-            "players_online": server.attributes.players,
-            "players_max": server.attributes.max_players,
-            "players_list": [p.attributes.name for p in players]
+            "name": server["data"]["attributes"]["name"],
+            "map": server["data"]["attributes"]["details"]["map"],
+            "players_online": server["data"]["attributes"]["players"],
+            "players_max": server["data"]["attributes"]["maxPlayers"],
+            "players_list": [p["attributes"]["name"] for p in players["data"]]
         }
         logging.info(f"Статус получен: {status['players_online']}/{status['players_max']} игроков")
         return status
@@ -289,7 +281,6 @@ async def restart_command(interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     logging.info(f"Бот {bot.user} запущен!")
-    init_battlemetrics()
     try:
         synced = await bot.tree.sync()
         logging.info(f"Синхронизировано {len(synced)} команд(ы)")
