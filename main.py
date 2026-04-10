@@ -198,7 +198,7 @@ def create_players_embed(players_list):
 
     add_field_no_name(embed, left, inline=True)
     add_field_no_name(embed, right, inline=True)
-    embed.set_footer(text="Полные ники, без обрезания")
+    embed.set_footer(text="🔄 Обновление было")
     embed.timestamp = datetime.now(timezone.utc)
     return embed
 
