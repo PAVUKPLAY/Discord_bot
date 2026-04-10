@@ -11,15 +11,15 @@ from typing import Optional, Dict, Any
 # ================= НАСТРОЙКИ ========================================
 DISCORD_BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 if not DISCORD_BOT_TOKEN:
-    logging.error("❌ Discord Bot Token не найден! Установите переменную окружения DISCORD_BOT_TOKEN")
+    logging.error("❌ Discord Bot Token не найден!")
     sys.exit(1)
 
 BATTLEMETRICS_TOKEN = os.getenv('BATTLEMETRICS_TOKEN')
 if not BATTLEMETRICS_TOKEN:
-    logging.error("❌ BattleMetrics API Token не найден! Установите переменную окружения BATTLEMETRICS_TOKEN")
+    logging.error("❌ BattleMetrics API Token не найден!")
     sys.exit(1)
 
-BATTLEMETRICS_SERVER_ID = "32115022"   # Замените на ID вашего сервера в BattleMetrics
+BATTLEMETRICS_SERVER_ID = "32115022"   # ЗАМЕНИТЕ НА РЕАЛЬНЫЙ ID
 CHANNEL_ID = 1490763178513141892
 
 RESTART_ROLE_IDS = [
@@ -39,10 +39,9 @@ players_message = None
 server_online_since = None
 
 # ------------------------------------------------------------
-# Прямой запрос к BattleMetrics API
+# HTTP запрос к BattleMetrics API
 # ------------------------------------------------------------
 async def fetch_battlemetrics(endpoint: str):
-    """Выполняет GET-запрос к API BattleMetrics с авторизацией."""
     url = f"https://api.battlemetrics.com/{endpoint}"
     headers = {
         "Authorization": f"Bearer {BATTLEMETRICS_TOKEN}",
@@ -58,18 +57,28 @@ async def fetch_battlemetrics(endpoint: str):
 
 async def get_server_status() -> Optional[Dict[str, Any]]:
     try:
-        # Получаем информацию о сервере
+        # Получаем данные сервера
         server_data = await fetch_battlemetrics(f"servers/{BATTLEMETRICS_SERVER_ID}")
         if not server_data:
             return None
         attrs = server_data["data"]["attributes"]
+        
         # Получаем список игроков
         players_data = await fetch_battlemetrics(f"servers/{BATTLEMETRICS_SERVER_ID}/players")
-        if not players_data:
-            players_list = []
-        else:
-            players_list = [p["attributes"]["name"] for p in players_data.get("data", [])]
-
+        players_list = []
+        if players_data and "data" in players_data:
+            for p in players_data["data"]:
+                name = p.get("attributes", {}).get("name")
+                if name:
+                    players_list.append(name)
+        # Если нет, пробуем alternative (некоторые версии API кладут игроков в included)
+        if not players_list and players_data and "included" in players_data:
+            for inc in players_data["included"]:
+                if inc.get("type") == "player":
+                    name = inc.get("attributes", {}).get("name")
+                    if name:
+                        players_list.append(name)
+        
         status = {
             "name": attrs["name"],
             "map": attrs["details"].get("map", "Unknown"),
@@ -77,14 +86,14 @@ async def get_server_status() -> Optional[Dict[str, Any]]:
             "players_max": attrs["maxPlayers"],
             "players_list": players_list
         }
-        logging.info(f"Статус получен: {status['players_online']}/{status['players_max']} игроков")
+        logging.info(f"Статус: {status['players_online']}/{status['players_max']} игроков, список: {len(players_list)}")
         return status
     except Exception as e:
-        logging.error(f"Ошибка запроса к BattleMetrics API: {e}")
+        logging.error(f"Ошибка запроса: {e}")
         return None
 
 # ------------------------------------------------------------
-# Форматирование времени работы
+# Форматирование времени
 # ------------------------------------------------------------
 def format_uptime(seconds):
     days = seconds // 86400
@@ -113,7 +122,6 @@ def create_status_embed(status_data):
             description="Не удаётся получить данные через BattleMetrics API.",
             color=discord.Color.red()
         )
-
     percent = round(status_data['players_online'] / status_data['players_max'] * 100)
     if percent >= 80:
         color = discord.Color.red()
@@ -195,6 +203,9 @@ def create_players_embed(players_list):
     embed.timestamp = datetime.now(timezone.utc)
     return embed
 
+# ------------------------------------------------------------
+# Фоновое обновление
+# ------------------------------------------------------------
 @tasks.loop(minutes=1)
 async def auto_update():
     global status_message, players_message, server_online_since
@@ -261,6 +272,9 @@ async def auto_update():
         except Exception as e:
             logging.error(f"Ошибка редактирования списка: {e}")
 
+# ------------------------------------------------------------
+# Команда /restart
+# ------------------------------------------------------------
 @bot.tree.command(name="restart", description="Перезапустить бота (только для определённых ролей)")
 async def restart_command(interaction: discord.Interaction):
     user_role_ids = [role.id for role in interaction.user.roles]
@@ -271,6 +285,9 @@ async def restart_command(interaction: discord.Interaction):
     logging.info(f"Бот перезапущен пользователем {interaction.user} (ID: {interaction.user.id})")
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
+# ------------------------------------------------------------
+# Событие готовности
+# ------------------------------------------------------------
 @bot.event
 async def on_ready():
     logging.info(f"Бот {bot.user} запущен!")
@@ -281,6 +298,9 @@ async def on_ready():
         logging.error(f"Ошибка синхронизации команд: {e}")
     auto_update.start()
 
+# ------------------------------------------------------------
+# Запуск
+# ------------------------------------------------------------
 if __name__ == "__main__":
     if BATTLEMETRICS_SERVER_ID == "ВАШ_ID_СЕРВЕРА":
         print("⚠️ ВНИМАНИЕ: Укажите ID вашего сервера в переменной BATTLEMETRICS_SERVER_ID!")
