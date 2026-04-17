@@ -214,7 +214,7 @@ def create_players_embed(players_list):
     lines = []
     for name, time_str in temp_lines:
         padded_name = name.ljust(max_name_len + 2)
-        lines.append(f"{padded_name} — ⏱️ {time_str}")
+        lines.append(f"{padded_name}   {time_str}")   # без тире, три пробела
 
     code_block = "```\n" + "\n".join(lines) + "\n```"
     embed = discord.Embed(
