@@ -315,7 +315,7 @@ async def on_ready():
         synced = await bot.tree.sync()
         logging.info(f"Синхронизировано {len(synced)} команд(ы)")
     except Exception as e:
-        logging.error(f"Ошибка синхронизации команд: e}")
+        logging.error(f"Ошибка синхронизации команд: {e}")  # <--- ИСПРАВЛЕНО
     auto_update.start()
 
 # ------------------------------------------------------------
