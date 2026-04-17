@@ -19,7 +19,7 @@ if not BATTLEMETRICS_TOKEN:
     logging.error("❌ BattleMetrics API Token не найден!")
     sys.exit(1)
 
-BATTLEMETRICS_SERVER_ID = "32115022"          # ID вашего сервера
+BATTLEMETRICS_SERVER_ID = "32115022"
 CHANNEL_ID = 1490763178513141892
 
 RESTART_ROLE_IDS = [
@@ -28,7 +28,6 @@ RESTART_ROLE_IDS = [
     1333195904387387434
 ]
 
-# Приоритетные теги (регистр не важен, ищется вхождение в ник)
 PRIORITY_TAGS = ["[G4S]", "[ОМОН]", "[Полиция]", "[Мед]"]
 # ====================================================================
 
@@ -40,12 +39,8 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 status_message = None
 players_message = None
 server_online_since = None
-
-# Единая HTTP-сессия для всех запросов
 session = None
 
-# ------------------------------------------------------------
-# HTTP запрос к BattleMetrics API (с переиспользованием сессии)
 # ------------------------------------------------------------
 async def fetch_battlemetrics(endpoint: str):
     global session
@@ -69,11 +64,8 @@ async def fetch_battlemetrics(endpoint: str):
         return None
 
 # ------------------------------------------------------------
-# Получение статуса сервера и списка игроков с временем сессии
-# ------------------------------------------------------------
 async def get_server_status() -> Optional[Dict[str, Any]]:
     try:
-        # Запрашиваем сервер вместе с игроками и их сессиями
         data = await fetch_battlemetrics(
             f"servers/{BATTLEMETRICS_SERVER_ID}?include=player,session"
         )
@@ -81,11 +73,8 @@ async def get_server_status() -> Optional[Dict[str, Any]]:
             return None
 
         attrs = data["data"]["attributes"]
-
-        # Словарь: player_id -> длительность сессии в секундах
         session_times = {}
 
-        # Сначала находим все активные сессии
         for item in data.get("included", []):
             if item.get("type") == "session":
                 player_id = item["relationships"]["player"]["data"]["id"]
@@ -96,7 +85,6 @@ async def get_server_status() -> Optional[Dict[str, Any]]:
                     duration = int((now - start_time).total_seconds())
                     session_times[player_id] = duration
 
-        # Собираем игроков
         players = []
         for item in data.get("included", []):
             if item.get("type") == "player" and "attributes" in item:
@@ -106,13 +94,12 @@ async def get_server_status() -> Optional[Dict[str, Any]]:
                     duration = session_times.get(player_id, 0)
                     players.append({"name": name, "duration": duration})
 
-        # Сортировка: сначала игроки с приоритетными тегами, затем остальные по алфавиту
         def priority_key(p):
             name_upper = p["name"].upper()
             for idx, tag in enumerate(PRIORITY_TAGS):
                 if tag.upper() in name_upper:
-                    return (0, idx, name_upper)  # группа 0, сортировка по индексу тега, затем по имени
-            return (1, name_upper)  # группа 1, остальные по алфавиту
+                    return (0, idx, name_upper)
+            return (1, name_upper)
 
         players.sort(key=priority_key)
 
@@ -130,8 +117,6 @@ async def get_server_status() -> Optional[Dict[str, Any]]:
         return None
 
 # ------------------------------------------------------------
-# Форматирование времени (uptime сервера)
-# ------------------------------------------------------------
 def format_uptime(seconds):
     days = seconds // 86400
     hours = (seconds % 86400) // 3600
@@ -147,9 +132,6 @@ def format_uptime(seconds):
     parts.append(f"{secs}с")
     return " ".join(parts)
 
-# ------------------------------------------------------------
-# Форматирование времени пребывания игрока
-# ------------------------------------------------------------
 def format_duration(seconds: int) -> str:
     if seconds < 60:
         return f"{seconds}с"
@@ -164,8 +146,6 @@ def make_progress_bar(percent, length=15, filled="█", empty="░"):
     filled_count = round(length * percent / 100)
     return filled * filled_count + empty * (length - filled_count)
 
-# ------------------------------------------------------------
-# Embed статуса сервера
 # ------------------------------------------------------------
 def create_status_embed(status_data):
     global server_online_since
@@ -190,7 +170,6 @@ def create_status_embed(status_data):
         status_text = "Низкая нагрузка"
 
     bar_precise = make_progress_bar(percent, 15)
-    # Подсчёт игроков с тегом [G4S] (регистронезависимо)
     g4s_count = sum(1 for p in status_data['players_list'] if "[g4s]" in p["name"].lower())
 
     embed = discord.Embed(
@@ -215,8 +194,6 @@ def create_status_embed(status_data):
     return embed
 
 # ------------------------------------------------------------
-# Embed списка игроков с временем на сервере
-# ------------------------------------------------------------
 def create_players_embed(players_list):
     if not players_list:
         return discord.Embed(
@@ -225,54 +202,36 @@ def create_players_embed(players_list):
             color=discord.Color.blue()
         )
 
-    lines = []
+    temp_lines = []
+    max_name_len = 0
     for p in players_list:
         name = p["name"]
         duration_sec = p["duration"]
-        if duration_sec > 0:
-            time_str = format_duration(duration_sec)
-        else:
-            time_str = "только зашёл"
-        lines.append(f"🎮 `{name}` — ⏱️ {time_str}")
+        time_str = format_duration(duration_sec) if duration_sec > 0 else "только зашёл"
+        temp_lines.append((name, time_str))
+        max_name_len = max(max_name_len, len(name))
 
+    lines = []
+    for name, time_str in temp_lines:
+        padded_name = name.ljust(max_name_len + 2)
+        lines.append(f"{padded_name} — ⏱️ {time_str}")
+
+    code_block = "```\n" + "\n".join(lines) + "\n```"
     embed = discord.Embed(
         title=f"🎮 Список игроков ({len(players_list)})",
         color=discord.Color.blue()
     )
-
-    # Разбиваем на две колонки
-    half = (len(lines) + 1) // 2
-    left = lines[:half]
-    right = lines[half:]
-
-    def add_field_no_name(embed, content, inline=True):
-        if not content:
-            return
-        block = "\n".join(content)
-        if len(block) > 1024:
-            # Если слишком длинно, разбиваем на несколько полей
-            for i in range(0, len(content), 20):
-                chunk_block = "\n".join(content[i:i+20])
-                embed.add_field(name="\u200b", value=chunk_block, inline=inline)
-        else:
-            embed.add_field(name="\u200b", value=block, inline=inline)
-
-    add_field_no_name(embed, left, inline=True)
-    add_field_no_name(embed, right, inline=True)
-
+    embed.description = code_block
     embed.set_footer(text="🔄 Обновление было")
     embed.timestamp = datetime.now(timezone.utc)
     return embed
 
-# ------------------------------------------------------------
-# Фоновое обновление (каждую минуту)
 # ------------------------------------------------------------
 @tasks.loop(minutes=1)
 async def auto_update():
     global status_message, players_message, server_online_since
     status_data = await get_server_status()
 
-    # Логика uptime сервера (сбрасываем при недоступности)
     if status_data is not None:
         if server_online_since is None:
             server_online_since = datetime.now(timezone.utc)
@@ -282,7 +241,6 @@ async def auto_update():
             logging.info("Сервер не отвечает, uptime сброшен")
             server_online_since = None
 
-    # Статус бота (Activity)
     if status_data:
         activity = discord.Activity(
             type=discord.ActivityType.watching,
@@ -298,7 +256,6 @@ async def auto_update():
         logging.error(f"Канал {CHANNEL_ID} не найден!")
         return
 
-    # Обновление статус-сообщения
     embed_status = create_status_embed(status_data)
     if status_message is None:
         async for msg in channel.history(limit=50):
@@ -317,7 +274,6 @@ async def auto_update():
         except Exception as e:
             logging.error(f"Ошибка редактирования статуса: {e}")
 
-    # Обновление сообщения со списком игроков
     players_list = status_data["players_list"] if status_data else []
     embed_players = create_players_embed(players_list)
     if players_message is None:
@@ -338,8 +294,6 @@ async def auto_update():
             logging.error(f"Ошибка редактирования списка: {e}")
 
 # ------------------------------------------------------------
-# Команда /restart
-# ------------------------------------------------------------
 @bot.tree.command(name="restart", description="Перезапустить бота (только для определённых ролей)")
 async def restart_command(interaction: discord.Interaction):
     user_role_ids = [role.id for role in interaction.user.roles]
@@ -348,28 +302,22 @@ async def restart_command(interaction: discord.Interaction):
         return
     await interaction.response.send_message("🔄 Перезапуск бота...", ephemeral=True)
     logging.info(f"Бот перезапущен пользователем {interaction.user} (ID: {interaction.user.id})")
-    # Корректное завершение для автоматического перезапуска хостингом
     await bot.close()
     sys.exit(0)
 
-# ------------------------------------------------------------
-# Событие готовности
 # ------------------------------------------------------------
 @bot.event
 async def on_ready():
     global session
     logging.info(f"Бот {bot.user} запущен!")
-    # Создаём единую сессию aiohttp
     session = aiohttp.ClientSession()
     try:
         synced = await bot.tree.sync()
         logging.info(f"Синхронизировано {len(synced)} команд(ы)")
     except Exception as e:
-        logging.error(f"Ошибка синхронизации команд: {e}")
+        logging.error(f"Ошибка синхронизации команд: e}")
     auto_update.start()
 
-# ------------------------------------------------------------
-# Запуск
 # ------------------------------------------------------------
 if __name__ == "__main__":
     if BATTLEMETRICS_SERVER_ID == "32115022":
