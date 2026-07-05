@@ -15,7 +15,6 @@ from config import (
 )
 
 
-# ------------------------------------------------------------
 async def fetch_battlemetrics(endpoint: str):
     if bot.session is None:
         logging.error("Сессия aiohttp не инициализирована!")
@@ -40,7 +39,6 @@ async def fetch_battlemetrics(endpoint: str):
         return None
 
 
-# ------------------------------------------------------------
 async def get_server_status() -> Optional[Dict[str, Any]]:
     try:
         data = await fetch_battlemetrics(
@@ -94,7 +92,6 @@ async def get_server_status() -> Optional[Dict[str, Any]]:
         return None
 
 
-# ------------------------------------------------------------
 def format_uptime(seconds):
     days = seconds // 86400
     hours = (seconds % 86400) // 3600
@@ -127,7 +124,6 @@ def make_progress_bar(percent, length=15, filled="█", empty="░"):
     return filled * filled_count + empty * (length - filled_count)
 
 
-# ------------------------------------------------------------
 def create_status_embed(status_data):
     if status_data is None:
         return discord.Embed(
@@ -174,7 +170,6 @@ def create_status_embed(status_data):
     return embed
 
 
-# ------------------------------------------------------------
 def create_players_embed(players_list):
     if not players_list:
         return discord.Embed(
@@ -208,7 +203,6 @@ def create_players_embed(players_list):
     return embed
 
 
-# ------------------------------------------------------------
 @tasks.loop(minutes=1)
 async def auto_update():
     status_data = await get_server_status()
