@@ -1,6 +1,7 @@
 import discord
+from discord import ButtonStyle, TextStyle
 from discord import app_commands
-from discord.ui import Modal, TextInput, View, button, ButtonStyle
+from discord.ui import Modal, TextInput, View, button
 
 from bot import bot
 from config import (
@@ -22,7 +23,7 @@ class RoleModal(Modal, title='Выдача роли'):
         label='ID пользователя или упоминание',
         placeholder='Введите ID или @упомяните пользователя',
         required=True,
-        style=discord.TextStyle.short
+        style=TextStyle.short
     )
 
     async def on_submit(self, interaction: discord.Interaction):
